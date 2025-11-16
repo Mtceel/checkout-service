@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-service
+  namespace: platform-services
+  labels:
+    app: checkout-service
+    tier: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: checkout-service
+  template:
+    metadata:
+      labels:
+        app: checkout-service
+        tier: backend
+    spec:
+      containers:
+      - name: checkout-service
+        image: mtceel/checkout-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3002
+          name: http
+        env:
+        - name: PORT
+          value: "3002"
+        - name: DATABASE_URL
+          value: "postgres://postgres:postgres123@postgres.platform-services.svc.cluster.local:5432/saas_platform"
+        - name: REDIS_URL
+          value: "redis://redis.platform-services.svc.cluster.local:6379"
+        - name: PRODUCTS_SERVICE_URL
+          value: "http://products-service.platform-services.svc.cluster.local"
+        - name: ORDERS_SERVICE_URL
+          value: "http://orders-service.platform-services.svc.cluster.local"
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "300m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-service
+  namespace: platform-services
+  labels:
+    app: checkout-service
+spec:
+  type: ClusterIP
+  selector:
+    app: checkout-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3002
+    protocol: TCP
